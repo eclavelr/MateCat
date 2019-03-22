@@ -1,6 +1,7 @@
 <?php
 
-use Exceptions\NotFoundError;
+use DataAccess\ArrayAccessTrait;
+use Exceptions\NotFoundException;
 use Outsource\ConfirmationDao;
 use Outsource\ConfirmationStruct;
 use Outsource\TranslatedConfirmationStruct;
@@ -9,7 +10,9 @@ use Translators\JobsTranslatorsDao;
 use Translators\JobsTranslatorsStruct;
 
 class Jobs_JobStruct extends DataAccess_AbstractDaoSilentStruct implements DataAccess_IDaoStruct, \ArrayAccess {
-    
+
+    use ArrayAccessTrait;
+
     public $id;
     public $password;
     public $id_project;
@@ -80,6 +83,22 @@ class Jobs_JobStruct extends DataAccess_AbstractDaoSilentStruct implements DataA
      */
     protected $_openThreads;
 
+    protected $is_review;
+
+    /**
+     *
+     * @return array
+     */
+    public function getTMProps(){
+        $projectData = $this->getProject();
+        $result = [
+                'project_id'   => $projectData->id,
+                'project_name' => $projectData->name,
+                'job_id'       => $this->id,
+        ];
+        return $result;
+    }
+
     /**
      * @return JobsTranslatorsStruct
      */
@@ -96,7 +115,7 @@ class Jobs_JobStruct extends DataAccess_AbstractDaoSilentStruct implements DataA
 
     /**
      * @return ConfirmationStruct
-     * @throws NotFoundError
+     * @throws NotFoundException
      */
     public function getOutsource() {
 
@@ -112,7 +131,7 @@ class Jobs_JobStruct extends DataAccess_AbstractDaoSilentStruct implements DataA
                 //Ok Do Nothing
                 break;
             default:
-                throw new NotFoundError( "Vendor id " . $this->_outsource->id_vendor . " not found." );
+                throw new NotFoundException( "Vendor id " . $this->_outsource->id_vendor . " not found." );
                 break;
         }
 
@@ -156,7 +175,7 @@ class Jobs_JobStruct extends DataAccess_AbstractDaoSilentStruct implements DataA
 
         return $this->cachable( __function__, $this, function ( $job ) {
             $mDao = new Projects_MetadataDao();
-            return $mDao->setCacheTTL( 60 * 60 )->allByProjectId( $job->id_project );
+            return $mDao->setCacheTTL( 60 * 60 * 24 * 30 )->allByProjectId( $job->id_project );
         } );
 
     }
@@ -262,39 +281,21 @@ class Jobs_JobStruct extends DataAccess_AbstractDaoSilentStruct implements DataA
         $this->rejected_words;
     }
 
-    /**
-     * This method is executed when using isset() or empty() on objects implementing ArrayAccess.
-     *
-     * @param mixed $offset
-     *
-     * @return bool
-     */
-    public function offsetExists( $offset ) {
-        return property_exists( $this, $offset );
+    public function isCanceled() {
+        return $this->status == Constants_JobStatus::STATUS_CANCELLED ;
     }
 
-    /**
-     * @param mixed $offset
-     *
-     * @returns mixed
-     */
-    public function offsetGet( $offset ) {
-        return $this->__get( $offset );
+    public function isArchived() {
+        return $this->status == Constants_JobStatus::STATUS_ARCHIVED ;
     }
 
-    /**
-     * @param mixed $offset
-     * @param mixed $value
-     */
-    public function offsetSet( $offset, $value ) {
-        $this->__set( $offset, $value );
+    public function setIsReview($is_review){
+        $this->is_review = $is_review;
+        return $this;
     }
 
-    /**
-     * @param mixed $offset
-     */
-    public function offsetUnset( $offset ) {
-        $this->__set( $offset, null );
+    public function getIsReview(){
+        return $this->is_review;
     }
 
 }

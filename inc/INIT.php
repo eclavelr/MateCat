@@ -52,9 +52,9 @@ class INIT {
      */
     public static $TRACKING_CODES_VIEW_PATH = "";
 
-    public static $QUEUE_NAME = "matecat_analysis_queue";
-    public static $COMMENTS_ENABLED = true ;
-    public static $SSE_COMMENTS_QUEUE_NAME = "matecat_sse_comments";
+    public static $QUEUE_NAME                   = "matecat_analysis_queue";
+    public static $COMMENTS_ENABLED             = true ;
+    public static $SSE_NOTIFICATIONS_QUEUE_NAME = "matecat_sse_notifications";
     public static $SSE_BASE_URL;
 
     public static $SMTP_HOST;
@@ -337,14 +337,16 @@ class INIT {
 //                    'php'   => array( '', '', 'extxml' ),
                     'json'  => array( '', '', 'extxml'),
                     'yaml'  => array( '', '', 'extxml' ),
-                    'yml'   => array( '', '', 'extxml' )
+                    'yml'   => array( '', '', 'extxml' ),
+                    'md'    => array( '', '', 'extxml' ),
             ),
             'Scanned Files'                 => array(
                     'pdf'   => array( '', '', 'extpdf' ),
                     'bmp'   => array( '', '', 'extimg' ),
                     'png'   => array( '', '', 'extimg' ),
                     'gif'   => array( '', '', 'extimg' ),
-                    'jpeg'   => array( '', '', 'extimg' ),
+                    'jpeg'  => array( '', '', 'extimg' ),
+                    'jpg'   => array( '', '', 'extimg' ),
                     'tiff'  => array( '', '', 'extimg' )
             ),
             "Interchange Formats" => array(
@@ -398,7 +400,13 @@ class INIT {
 
     public static $PLUGIN_LOAD_PATHS = array();
 
+    /**
+     * @deprecated use AUTOLOAD_PLUGINS
+     * @var array
+     */
     public static $MANDATORY_PLUGINS = array();
+
+    public static $AUTOLOAD_PLUGINS = [] ;
 
     /**
      * Definitions for the asynchronous task runner

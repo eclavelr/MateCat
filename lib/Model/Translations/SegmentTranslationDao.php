@@ -15,9 +15,7 @@ class Translations_SegmentTranslationDao extends DataAccess_AbstractDao {
      * @return Translations_SegmentTranslationStruct
      */
 
-    public static function findBySegmentAndJob( $id_segment, $id_job ) {
-        Log::doLog( $id_segment, $id_job );
-
+    public static function findBySegmentAndJob( $id_segment, $id_job, $ttl = 0 ) {
         $conn = Database::obtain()->getConnection();
 
         $sql = "SELECT * FROM segment_translations WHERE " .
@@ -26,15 +24,11 @@ class Translations_SegmentTranslationDao extends DataAccess_AbstractDao {
 
         $stmt = $conn->prepare( $sql );
 
-        $stmt->execute( array(
-            'id_segment' => $id_segment,
-            'id_job'     => $id_job
-        ));
-
-        $stmt->setFetchMode(PDO::FETCH_CLASS,
-            'Translations_SegmentTranslationStruct');
-
-        return $stmt->fetch();
+        $thisDao = new self();
+        return $thisDao->setCacheTTL( $ttl )->_fetchObject( $stmt, new Translations_SegmentTranslationStruct(), [
+                'id_job'     => $id_job,
+                'id_segment' => $id_segment
+        ] )[ 0 ];
     }
 
     /**
@@ -216,5 +210,111 @@ class Translations_SegmentTranslationDao extends DataAccess_AbstractDao {
         return $affectedRows;
 
     }
+
+    public function setApprovedByChunk( $chunk ) {
+        $sql = "UPDATE segment_translations
+            SET status = :status
+              WHERE id_job = :id_job AND id_segment BETWEEN :first_segment AND :last_segment";
+
+        $conn = Database::obtain()->getConnection();
+        $stmt = $conn->prepare( $sql );
+
+        $stmt->execute( [
+                'status'        => Constants_TranslationStatus::STATUS_APPROVED,
+                'id_job'        => $chunk->id,
+                'first_segment' => $chunk->job_first_segment,
+                'last_segment'  => $chunk->job_last_segment
+        ] );
+
+        $counter = new \WordCount_Counter;
+        $counter->initializeJobWordCount( $chunk->id, $chunk->password );
+
+        return $stmt->rowCount();
+    }
+
+    public function setTranslatedByChunk( $chunk ) {
+
+        $sql = "UPDATE segment_translations
+            SET status = :status
+              WHERE id_job = :id_job AND id_segment BETWEEN :first_segment AND :last_segment AND status != :approved_status";
+
+        $conn = Database::obtain()->getConnection();
+        $stmt = $conn->prepare( $sql );
+
+        $stmt->execute( [
+                'status'          => Constants_TranslationStatus::STATUS_TRANSLATED,
+                'id_job'          => $chunk->id,
+                'first_segment'   => $chunk->job_first_segment,
+                'last_segment'    => $chunk->job_last_segment,
+                'approved_status' => Constants_TranslationStatus::STATUS_APPROVED,
+        ] );
+
+        $counter = new \WordCount_Counter;
+        $counter->initializeJobWordCount( $chunk->id, $chunk->password );
+
+        return $stmt->rowCount();
+    }
+
+    public static function getSegmentsWithIssues( $job_id, $segments_ids ) {
+        $where_values = $segments_ids;
+
+        $sql  = "SELECT * FROM segment_translations WHERE id_segment IN (" . str_repeat( '?,', count( $segments_ids ) - 1 ) . '?' . ") AND id_job = ?";
+        $conn = Database::obtain()->getConnection();
+        $stmt = $conn->prepare( $sql );
+        $stmt->setFetchMode( PDO::FETCH_CLASS, '\DataAccess\ShapelessConcreteStruct' );
+        $where_values[] = $job_id;
+        $stmt->execute( $where_values );
+
+        return $stmt->fetchAll();
+    }
+
+    public static function updateSegmentStatusBySegmentId( $id_job, $id_segment, $status ) {
+        $sql = "UPDATE segment_translations SET status = :status WHERE id_job = :id_job AND id_segment = :id_segment " ;
+        $conn         = Database::obtain()->getConnection();
+        $stmt = $conn->prepare( $sql ) ;
+        $stmt->execute( ['id_job' => $id_job, 'id_segment' => $id_segment, 'status' => $status ] ) ;
+
+        return $stmt->rowCount() ;
+    }
+
+    public static function getUnchangebleStatus( $segments_ids, $status ) {
+        $where_values = [];
+        $conn         = Database::obtain()->getConnection();
+
+        if ( $status == Constants_TranslationStatus::STATUS_APPROVED ) {
+            $where_values[] = Constants_TranslationStatus::STATUS_TRANSLATED;
+
+        } elseif ( $status == Constants_TranslationStatus::STATUS_TRANSLATED ) {
+            $where_values[] = Constants_TranslationStatus::STATUS_APPROVED ;
+            $where_values[] = Constants_TranslationStatus::STATUS_DRAFT ;
+            $where_values[] = Constants_TranslationStatus::STATUS_NEW ;
+        }
+        else {
+            throw new Exception('not allowed to change status to '. $status ) ;
+        }
+
+        $status_placeholders       = str_repeat( '?,', count( $where_values ) -1 ) . '?' ;
+        $segments_ids_placeholders = str_repeat( '?,', count( $segments_ids ) - 1 ) . '?';
+
+        $sql = "SELECT id_segment FROM segment_translations
+                    WHERE
+                    (
+                      status NOT IN( $status_placeholders )  OR
+                      translation IS NULL OR
+                      translation = ''
+                    ) AND id_segment IN ( $segments_ids_placeholders )
+                    ";
+
+        $where_values = array_merge( $where_values, $segments_ids );
+        $stmt         = $conn->prepare( $sql );
+        $stmt->execute( $where_values );
+
+        return $stmt->fetchAll( PDO::FETCH_FUNC, function ( $id_segment ) {
+            return (int)$id_segment;
+        } );
+
+
+    }
+
 
 }

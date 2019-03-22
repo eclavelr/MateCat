@@ -13,11 +13,11 @@ namespace API\V2\Json;
 use API\App\Json\OutsourceConfirmation;
 use CatUtils;
 use Chunks_ChunkStruct;
-use Langs_Languages;
+use DataAccess\ShapelessConcreteStruct;
+use FeatureSet;
 use Langs_LanguageDomains;
-use LQA\ChunkReviewDao;
+use Langs_Languages;
 use ManageUtils;
-use Routes;
 use TmKeyManagement_ClientTmKeyStruct;
 use Users_UserStruct;
 use Utils;
@@ -82,13 +82,15 @@ class Job {
     }
 
     /**
-     * @param $jStruct Chunks_ChunkStruct
+     * @param                         $jStruct Chunks_ChunkStruct
+     *
+     * @param \Projects_ProjectStruct $project
+     * @param FeatureSet              $featureSet
      *
      * @return array
      * @throws \Exception
-     * @throws \Exceptions\NotFoundError
      */
-    public function renderItem( Chunks_ChunkStruct $jStruct ) {
+    public function renderItem( Chunks_ChunkStruct $jStruct, \Projects_ProjectStruct $project, FeatureSet $featureSet ) {
 
         $outsourceInfo = $jStruct->getOutsource();
         $tStruct       = $jStruct->getTranslator();
@@ -117,7 +119,39 @@ class Job {
 
         $warningsCount = $jStruct->getWarningsCount();
 
-        $project = $jStruct->getProject();
+        if( $featureSet->hasRevisionFeature() ) {
+            $reviseIssues = new \stdClass();
+
+        } else{
+
+            $reviseClass = new \Constants_Revise();
+
+            $jobQA = new \Revise_JobQA(
+                    $jStruct->id,
+                    $jStruct->password,
+                    $jobStats->getTotal(),
+                    $reviseClass
+            );
+
+            list( $jobQA, $reviseClass ) = $featureSet->filter( "overrideReviseJobQA", [ $jobQA, $reviseClass ], $jStruct->id,
+                    $jStruct->password,
+                    $jobStats->getTotal() );
+
+            /**
+             * @var $jobQA \Revise_JobQA
+             */
+            $jobQA->retrieveJobErrorTotals();
+            $jobQA->evalJobVote();
+            $qa_data      = $jobQA->getQaData();
+
+            $reviseIssues = [];
+            foreach ( $qa_data as $issue ) {
+                $reviseIssues[ str_replace( " " , "_", strtolower( $issue[ 'type' ] ) ) ] = [
+                        'allowed' => $issue[ 'allowed' ],
+                        'found'   => $issue[ 'found' ]
+                ];
+            }
+        }
 
         $result = [
                 'id'                    => (int)$jStruct->id,
@@ -135,8 +169,9 @@ class Job {
                 'created_at'            => Utils::api_timestamp( $jStruct->create_date ),
                 'create_date'           => $jStruct->create_date,
                 'formatted_create_date' => ManageUtils::formatJobDate( $jStruct->create_date ),
-                'quality_overall'       => CatUtils::getQualityOverallFromJobStruct( $jStruct ),
+                'quality_overall'       => CatUtils::getQualityOverallFromJobStruct( $jStruct, $project, $featureSet ),
                 'pee'                   => $jStruct->getPeeForTranslatedSegments(),
+                'tte'                   => (int)((int)$jStruct->total_time_to_edit/1000),
                 'private_tm_key'        => $this->getKeyList( $jStruct ),
                 'warnings_count'        => $warningsCount->warnings_count,
                 'warning_segments'      => ( isset( $warningsCount->warning_segments ) ? $warningsCount->warning_segments : [] ),
@@ -144,37 +179,34 @@ class Job {
                 'outsource'             => $outsource,
                 'translator'            => $translator,
                 'total_raw_wc'          => (int)$jStruct->total_raw_wc,
-                'urls'                  => [
-                        'translate' => Routes::translate(
-                                $project->name,
-                                $jStruct->id,
-                                $jStruct->password,
-                                $jStruct->source,
-                                $jStruct->target
-                        )
-                ],
                 'quality_summary'       => [
                         'equivalent_class' => $jStruct->getQualityInfo(),
                         'quality_overall'  => $jStruct->getQualityOverall(),
-                        'errors_count'     => (int)$jStruct->getErrorsCount()
-                ]
+                        'errors_count'     => (int)$jStruct->getErrorsCount(),
+                        'revise_issues' => $reviseIssues
+                ],
+
         ];
 
-        if ( !$project->isFeatureEnabled( \Features::REVIEW_IMPROVED ) ) {
 
-            $reviewChunk = ChunkReviewDao::findOneChunkReviewByIdJobAndPassword(
-                    $jStruct->id, $jStruct->password
-            );
+        $project = $jStruct->getProject();
 
-            $result[ 'urls' ][ 'revise' ] = Routes::revise(
-                    $project->name,
-                    $jStruct->id,
-                    ( !empty( $reviewChunk ) ? $reviewChunk->review_password : $jStruct->password ),
-                    $jStruct->source,
-                    $jStruct->target
-            );
+        /**
+         * @var $projectData ShapelessConcreteStruct[]
+         */
+        $projectData = ( new \Projects_ProjectDao() )->setCacheTTL( 60 * 60 * 24 )->getProjectData( $project->id, $project->password );
 
-        }
+        $formatted = new ProjectUrls( $projectData );
+
+        /** @var $formatted ProjectUrls */
+        $formatted = $featureSet->filter( 'projectUrls', $formatted );
+
+        $urlsObject = $formatted->render( true );
+        $result[ 'urls' ] = $urlsObject[ 'jobs' ][ $jStruct->id ][ 'chunks' ][ $jStruct->password ];
+
+        $result[ 'urls' ][ 'original_download_url' ]    = $urlsObject[ 'jobs' ][ $jStruct->id ][ 'original_download_url' ];
+        $result[ 'urls' ][ 'translation_download_url' ] = $urlsObject[ 'jobs' ][ $jStruct->id ][ 'translation_download_url' ];
+        $result[ 'urls' ][ 'xliff_download_url' ]       = $urlsObject[ 'jobs' ][ $jStruct->id ][ 'xliff_download_url' ];
 
         return $result;
 

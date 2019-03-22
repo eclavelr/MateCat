@@ -10,4 +10,10 @@ class Translations_TranslationVersionStruct extends DataAccess_AbstractDaoSilent
     public $version_number ;
     public $propagated_from ;
     public $time_to_edit ;
+
+    public $is_review ;
+    public $raw_diff ;
+
+    public $old_status ;
+    public $new_status ;
 }

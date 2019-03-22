@@ -8,7 +8,7 @@ class OutsourceVendor extends React.Component {
 
     constructor(props) {
         super(props);
-        let changesRates = (!_.isUndefined(Cookies.get( "matecat_changeRates")) ) ? $.parseJSON( Cookies.get( "matecat_changeRates"))
+        let changesRates = (!_.isUndefined(Cookies.get( "matecat_changeRates")) && !_.isNull(Cookies.get( "matecat_changeRates")) ) ? $.parseJSON( Cookies.get( "matecat_changeRates"))
             : {};
         this.state = {
             outsource: false,
@@ -22,12 +22,14 @@ class OutsourceVendor extends React.Component {
             errorPastDate: false,
             quoteNotAvailable: false,
             errorQuote: false,
-            needItFaster: false
+            needItFaster: false,
+            errorOutsource: false
         };
         this.getOutsourceQuote = this.getOutsourceQuote.bind(this);
-        if ( config.enable_outsource ) {
+        if ( config.enable_outsource) {
             this.getOutsourceQuote();
         }
+
         this.getChangeRates();
 
         this.currencies = {
@@ -60,7 +62,7 @@ class OutsourceVendor extends React.Component {
         API.OUTSOURCE.getOutsourceQuote(this.props.project.get('id'), this.props.project.get('password'),
             this.props.job.get('id'), this.props.job.get('password'), fixedDelivery, typeOfService, timezoneToShow, currency)
             .done(function (quoteData) {
-                if (quoteData.data) {
+                if (quoteData.data && quoteData.data.length > 0) {
 
                     if (quoteData.data[0][0].quote_available !== '1' && quoteData.data[0][0].outsourced !== '1') {
                         self.setState({
@@ -100,8 +102,9 @@ class OutsourceVendor extends React.Component {
 
                 } else {
                     self.setState({
-                        outsource: true,
-                        quoteNotAvailable: true
+                        outsource: false,
+                        errorQuote: true,
+                        errorOutsource: true
                     });
                 }
         });
@@ -109,7 +112,7 @@ class OutsourceVendor extends React.Component {
 
     getCurrentCurrency() {
         let currency = Cookies.get( "matecat_currency");
-        if (!_.isUndefined(currency)) {
+        if (!_.isUndefined(currency) && !_.isNull(currency) && currency !== "null") {
             return currency;
         } else {
             Cookies.set( "matecat_currency", 'EUR');
@@ -128,8 +131,12 @@ class OutsourceVendor extends React.Component {
 
     getCurrencyPrice(price) {
         let current = this.getCurrentCurrency();
-        return parseFloat(price * this.state.changeRates[current]/this.state.changeRates['EUR'])
-            .toFixed(2);
+        if ( this.state.changeRates ) {
+            return parseFloat(price * this.state.changeRates[current]/this.state.changeRates['EUR'])
+                .toFixed(2);
+        } else {
+            return price;
+        }
     }
 
     changeTimezone(value) {
@@ -142,10 +149,10 @@ class OutsourceVendor extends React.Component {
     getChangeRates() {
         let self = this;
         let changeRates = Cookies.get( "matecat_changeRates");
-        if( _.isUndefined(changeRates)) {
+        if( _.isUndefined(changeRates) || _.isNull(changeRates) || changeRates === "null") {
             API.OUTSOURCE.fetchChangeRates().done(function (response) {
                 var rates = $.parseJSON(response.data);
-                if (!_.isUndefined(rates)) {
+                if (!_.isUndefined(rates) && !_.isNull(changeRates)) {
                     self.setState({
                         changeRates: rates
                     });
@@ -184,8 +191,6 @@ class OutsourceVendor extends React.Component {
         $(this.outsourceForm).find('input[name=url_ko]').attr('value', this.url_ko);
         $(this.outsourceForm).find('input[name=confirm_urls]').attr('value', this.confirm_urls);
         $(this.outsourceForm).find('input[name=data_key]').attr('value', this.data_key);
-
-        UI.populateOutsourceForm();
 
         //IMPORTANT post out the quotes
         $(this.outsourceForm).find('input[name=quoteData]').attr('value', JSON.stringify( this.quoteResponse ) );
@@ -303,7 +308,7 @@ class OutsourceVendor extends React.Component {
     getNewRates() {
         let date = $(this.calendar).calendar('get date');
         let time = $(this.dropdownTime).dropdown('get value');
-        date.setHours(time[0]);
+        date.setHours(time);
         date.setMinutes(date.getMinutes() + (2 - parseFloat(this.state.timezone)) * 60);
         let timestamp = (new Date(date)).getTime();
         let now = new Date().getTime();
@@ -330,7 +335,7 @@ class OutsourceVendor extends React.Component {
             msg = "Choosing the best available translator from the matching " + this.props.translatorsNumber.printable + "...";
         }
         return <div className="translated-loader">
-            <img src="../../public/img/loading-outsource-translated.gif" />
+            <img src="../../public/img/loader-matecat-translated-outsource.gif" />
             <div className="text-loader-outsource">{msg}</div>
         </div>
     }
@@ -343,8 +348,8 @@ class OutsourceVendor extends React.Component {
         let priceCurrencySymbol = this.getPriceCurrencySymbol();
         let translatedWords = this.getTranslatedWords();
         let email = this.getUserEmail();
-        /*let translatorSubjects = this.getTranslatorSubjects();*/
         let pricePWord = this.getPricePW(price);
+        /*let translatorSubjects = this.getTranslatorSubjects();*/
         return <div className="outsource-to-vendor sixteen wide column">
             <div className="payment-service">
                 <div className="service-box">
@@ -354,7 +359,7 @@ class OutsourceVendor extends React.Component {
                 </div>
                 <div className="fiducial-logo">
                     <div className="translated-logo">Guaranteed by
-                        <img className="logo-t" src="/public/img/logo_translated.png" />
+                        <img className="logo-t" src="/public/img/matecat-logo-translated.svg" />
                     </div>
                 </div>
             </div>
@@ -446,7 +451,7 @@ class OutsourceVendor extends React.Component {
 
                                                 {(showDateMessage) ? (
                                                     <div className="errors-date too-far-date" >We will deliver before the selected date
-                                                        <div className="tip" data-tooltip="This date already provide us with all the time we need to deliver quality work at the lowest price"
+                                                        <div className="tip" data-tooltip="This date already provides us with all the time we need to deliver quality work at the lowest price"
                                                              data-position="bottom center" data-variation="wide"><i className="icon-info icon" /></div>
                                                     </div>
                                                 ):('')}
@@ -787,7 +792,19 @@ class OutsourceVendor extends React.Component {
 
     render() {
         let containerClass = (!this.state.extendedView) ? 'compact-background' : '';
-        return<div className={"background-outsource-vendor " + containerClass}>
+        if (this.state.errorOutsource) {
+            return  <div className={"background-outsource-vendor " + containerClass}>
+                <div className="outsource-to-vendor-reduced sixteen wide column">
+                    <div className="outsource-not-available">
+                        <div className="outsource-not-available-message">
+                            Quote not available, please contact us at info@translated.net
+                            or call +39 06 90 254 001
+                        </div>
+                    </div>
+                </div>
+            </div>
+        } else {
+            return <div className={"background-outsource-vendor " + containerClass}>
                 {this.state.extendedView ? ( this.getExtendedView()
                 ): (
                     this.getCompactView()
@@ -801,6 +818,7 @@ class OutsourceVendor extends React.Component {
                     <input type="hidden" name="quoteData" value=""/>
                 </form>
             </div>;
+        }
 
     }
 }

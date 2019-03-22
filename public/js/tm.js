@@ -17,11 +17,12 @@
 
         initTM: function() {
 
-// script per lo slide del pannello di manage tmx
+            // script per lo slide del pannello di manage tmx
             UI.setDropDown();
             UI.initOptionsTip();
             UI.initTmxTooltips();
             UI.checkTMKeysUpdateChecks();
+            UI.checkCrossLanguageSettings();
             $(".popup-tm .x-popup, .popup-tm h1 .continue").click(function(e) {
                 e.preventDefault();
                 UI.closeTMPanel();
@@ -89,6 +90,13 @@
                     $(".step2").show();
                     $(".step3").show();
                     $("#add-mt-provider-confirm").removeClass('hide');
+                }
+                if (provider === 'letsmt') {
+                    // Tilde MT (letsmt) uses a standalone web component
+                    // we'll hide the button because it's easier to use the webcomponent's builtin buttons
+                    $("#add-mt-provider-confirm").addClass('hide');
+                    // when done, we'll want to simulate clicking the original button. for this it must be enabled
+                    $("#add-mt-provider-confirm").removeClass('disabled');
                 }
             });
             $(".add-mt-engine").click(function() {
@@ -347,6 +355,8 @@
                     e.preventDefault();
                     UI.clickOnShareButton($(this).parent().find('.share-button'));
                 }
+            }).on('change', '#multi-match-1, #multi-match-2', function ( ) {
+                UI.storeMultiMatchLangs();
             });
             $(".popup-tm.slide-panel").on("scroll", function(){
                 if (!isVisible($(".active-tm-container thead"))) {
@@ -1349,8 +1359,8 @@
             var tr = button.closest('tr');
             var id = tr.data("id");
             $('.mgmt-table-mt .tm-warning-message').html('Do you really want to delete this MT? ' +
-                '<a class="pull-right btn-confirm-small continueDeletingMT confirm-tm-key-delete">       <span class="text">Confirm</span>   </a>' +
-                '<a class="pull-right btn-orange-small cancelDeletingMT cancel-tm-key-delete">      <span class="text"></span>   </a>').show();
+                '<a class="pull-right btn-orange-small cancelDeletingMT cancel-tm-key-delete">      <span class="text"></span>   </a>' +
+                '<a class="pull-right btn-confirm-small continueDeletingMT confirm-tm-key-delete">       <span class="text">Confirm</span>   </a>').show();
             $('.continueDeletingMT, .cancelDeletingMT').off('click');
             $('.continueDeletingMT').on('click', function(e){
                 e.preventDefault();
@@ -1382,20 +1392,23 @@
             var removeListeners = function () {
                 $('.confirm-tm-key-delete, .cancel-tm-key-delete').off('click');
             };
-            $('.confirm-tm-key-delete').off('click');
-            $('.confirm-tm-key-delete').on('click', function (e) {
-                e.preventDefault();
-                UI.deleteTM(button);
-                UI.hideAllBoxOnTables();
-                removeListeners();
-            });
-            $('.cancel-tm-key-delete').off('click');
-            $('.cancel-tm-key-delete').on('click', function (e) {
-                e.preventDefault();
-                UI.hideAllBoxOnTables();
-                $("tr.tm-key-deleting").removeClass('tm-key-deleting');
-                removeListeners();
-            });
+            setTimeout(function (  ) {
+                $('.confirm-tm-key-delete').off('click');
+                $('.confirm-tm-key-delete').on('click', function (e) {
+                    e.preventDefault();
+                    UI.deleteTM(button);
+                    UI.hideAllBoxOnTables();
+                    removeListeners();
+                });
+                $('.cancel-tm-key-delete').off('click');
+                $('.cancel-tm-key-delete').on('click', function (e) {
+                    e.preventDefault();
+                    UI.hideAllBoxOnTables();
+                    $("tr.tm-key-deleting").removeClass('tm-key-deleting');
+                    removeListeners();
+                });
+            }, 200);
+
         },
         deleteTM: function (button) {
             tr = $(button).parents('tr').first();
@@ -2157,6 +2170,43 @@
                     UI.showErrorOnActiveTMTable('There was a problem sharing the key, try again or contact the support.');
                 }
             });
+        },
+
+        storeMultiMatchLangs: function (  ) {
+            var primary = ( $('#multi-match-1').val() ) ? $('#multi-match-1').val() : undefined;
+            var secondary = ( $('#multi-match-2').val() ) ? $('#multi-match-2').val() : undefined;
+            if ( primary ) {
+                $('#multi-match-2').removeAttr('disabled');
+            } else {
+                $('#multi-match-2').attr('disabled', true);
+                $('#multi-match-2').val('');
+                secondary = undefined;
+            }
+            UI.crossLanguageSettings = {primary: primary, secondary: secondary};
+            localStorage.setItem("multiMatchLangs", JSON.stringify(UI.crossLanguageSettings));
+            if ( UI.getContribution ) {
+                if ( primary ) {
+                    SegmentActions.modifyTabVisibility( 'multiMatches', true );
+                    $( 'section.loaded' ).removeClass( 'loaded' );
+                    UI.getContribution( UI.currentSegment, 0 );
+                } else {
+                    SegmentActions.modifyTabVisibility( 'multiMatches', false );
+                }
+            }
+        },
+
+        checkCrossLanguageSettings: function (  ) {
+            var settings = localStorage.getItem("multiMatchLangs");
+            if ( settings ) {
+                var selectPrimary = $('#multi-match-1');
+                var selectSecondary = $('#multi-match-2');
+                settings = JSON.parse(settings)
+                UI.crossLanguageSettings = settings;
+                selectPrimary.val(settings.primary);
+                selectSecondary.val(settings.secondary);
+                if ( settings.primary )
+                    selectSecondary.removeAttr('disabled');
+            }
         }
 
     });
