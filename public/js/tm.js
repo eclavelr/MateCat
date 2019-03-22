@@ -17,11 +17,12 @@
 
         initTM: function() {
 
-// script per lo slide del pannello di manage tmx
+            // script per lo slide del pannello di manage tmx
             UI.setDropDown();
             UI.initOptionsTip();
             UI.initTmxTooltips();
             UI.checkTMKeysUpdateChecks();
+            UI.checkCrossLanguageSettings();
             $(".popup-tm .x-popup, .popup-tm h1 .continue").click(function(e) {
                 e.preventDefault();
                 UI.closeTMPanel();
@@ -89,6 +90,13 @@
                     $(".step2").show();
                     $(".step3").show();
                     $("#add-mt-provider-confirm").removeClass('hide');
+                }
+                if (provider === 'letsmt') {
+                    // Tilde MT (letsmt) uses a standalone web component
+                    // we'll hide the button because it's easier to use the webcomponent's builtin buttons
+                    $("#add-mt-provider-confirm").addClass('hide');
+                    // when done, we'll want to simulate clicking the original button. for this it must be enabled
+                    $("#add-mt-provider-confirm").removeClass('disabled');
                 }
             });
             $(".add-mt-engine").click(function() {
@@ -347,9 +355,11 @@
                     e.preventDefault();
                     UI.clickOnShareButton($(this).parent().find('.share-button'));
                 }
+            }).on('change', '#multi-match-1, #multi-match-2', function ( ) {
+                UI.storeMultiMatchLangs();
             });
             $(".popup-tm.slide-panel").on("scroll", function(){
-                if (!isVisible($(".active-tm-container h3"))) {
+                if (!isVisible($(".active-tm-container thead"))) {
                     $('.active-tm-container .notification-message').addClass('fixed-msg');
                 }
                 else {
@@ -368,30 +378,30 @@
             $(document).ready(function() {
 
                 UI.setTMsortable();
-                $("#inactivetm").tablesorter({
-                    textExtraction: function(node) {
-                        // extract data from markup and return it
-                        if($(node).hasClass('privatekey')) {
-                            return $(node).text();
-                        } else {
-                            return $(node).text();
-                        }
-                    },
-                    headers: {
-                        4: {
-                            sorter: true
-                        },
-                        5: {
-                            sorter: false
-                        },
-                        6: {
-                            sorter: false
-                        },
-                        7: {
-                            sorter: false
-                        }
-                    }
-                });
+                // $("#inactivetm").tablesorter({
+                //     textExtraction: function(node) {
+                //         // extract data from markup and return it
+                //         if($(node).hasClass('privatekey')) {
+                //             return $(node).text();
+                //         } else {
+                //             return $(node).text();
+                //         }
+                //     },
+                //     headers: {
+                //         4: {
+                //             sorter: true
+                //         },
+                //         5: {
+                //             sorter: false
+                //         },
+                //         6: {
+                //             sorter: false
+                //         },
+                //         7: {
+                //             sorter: false
+                //         }
+                //     }
+                // });
                 UI.checkCreateTmKeyFromQueryString();
                 UI.checkOpenTabFromParameters();
             });
@@ -1227,7 +1237,7 @@
             $( ".popup-tm").removeClass('open').animate({right: '-1100px' }, 400);
             $(".outer-tm").hide();
             $('body').removeClass('side-popup');
-            $.cookie('tmpanel-open', 0, { path: '/' });
+            Cookies.set('tmpanel-open', 0, { path: '/' });
             if((!APP.isCattool)&&(!checkAnalyzability('closing tmx panel'))) {
                 disableAnalyze();
                 if(!checkAnalyzabilityTimer) var checkAnalyzabilityTimer = window.setInterval( function () {
@@ -1294,7 +1304,7 @@
 
                     //check for cookie equals to it's value.
                     //This is unique by definition and we can do multiple downloads
-                    var token = $.cookie( downloadToken );
+                    var token = Cookies.get( downloadToken );
 
                     //if the cookie is found, download is completed
                     //remove iframe an re-enable download button
@@ -1302,7 +1312,7 @@
                         window.clearInterval( downloadTimer );
                         elem.removeClass( 'disabled' );
                         tr.find('.uploadloader').hide();
-                        $.cookie( downloadToken, null, {path: '/', expires: -1} );
+                        Cookies.set( downloadToken, null, {path: '/', expires: -1} );
                         errorMsg = $( '#' + iFrameID ).contents().find( 'body' ).text();
                         errorKey = $( tr ).attr( 'data-key' );
                         if ( errorMsg != '' ) {
@@ -1349,8 +1359,8 @@
             var tr = button.closest('tr');
             var id = tr.data("id");
             $('.mgmt-table-mt .tm-warning-message').html('Do you really want to delete this MT? ' +
-                '<a class="pull-right btn-confirm-small continueDeletingMT confirm-tm-key-delete">       <span class="text">Confirm</span>   </a>' +
-                '<a class="pull-right btn-orange-small cancelDeletingMT cancel-tm-key-delete">      <span class="text"></span>   </a>').show();
+                '<a class="pull-right btn-orange-small cancelDeletingMT cancel-tm-key-delete">      <span class="text"></span>   </a>' +
+                '<a class="pull-right btn-confirm-small continueDeletingMT confirm-tm-key-delete">       <span class="text">Confirm</span>   </a>').show();
             $('.continueDeletingMT, .cancelDeletingMT').off('click');
             $('.continueDeletingMT').on('click', function(e){
                 e.preventDefault();
@@ -1382,20 +1392,23 @@
             var removeListeners = function () {
                 $('.confirm-tm-key-delete, .cancel-tm-key-delete').off('click');
             };
-            $('.confirm-tm-key-delete').off('click');
-            $('.confirm-tm-key-delete').on('click', function (e) {
-                e.preventDefault();
-                UI.deleteTM(button);
-                UI.hideAllBoxOnTables();
-                removeListeners();
-            });
-            $('.cancel-tm-key-delete').off('click');
-            $('.cancel-tm-key-delete').on('click', function (e) {
-                e.preventDefault();
-                UI.hideAllBoxOnTables();
-                $("tr.tm-key-deleting").removeClass('tm-key-deleting');
-                removeListeners();
-            });
+            setTimeout(function (  ) {
+                $('.confirm-tm-key-delete').off('click');
+                $('.confirm-tm-key-delete').on('click', function (e) {
+                    e.preventDefault();
+                    UI.deleteTM(button);
+                    UI.hideAllBoxOnTables();
+                    removeListeners();
+                });
+                $('.cancel-tm-key-delete').off('click');
+                $('.cancel-tm-key-delete').on('click', function (e) {
+                    e.preventDefault();
+                    UI.hideAllBoxOnTables();
+                    $("tr.tm-key-deleting").removeClass('tm-key-deleting');
+                    removeListeners();
+                });
+            }, 200);
+
         },
         deleteTM: function (button) {
             tr = $(button).parents('tr').first();
@@ -1896,6 +1909,11 @@
             if (type == 'tmx') {
                 label = '<p class="pull-left">Select TMX file to import</p>';
                 format = '.tmx';
+                if ($(elem).parents('tr').find('.uploadfile').length > 0 ) {
+                    // $(elem).parents('tr').find('.uploadfile').slideToggle();
+                    $(elem).closest("tr").find('.action a').addClass('disabled');
+                    return;
+                }
             } else if (type == 'glossary') {
                 label = '<p class="pull-left">Select glossary in XLSX format ' +
                         '   <a href="http://www.matecat.com/support/managing-language-resources/add-glossary/" target="_blank">(How-to)</a>' +
@@ -1929,23 +1947,36 @@
             $(elem).parents('tr').find('.uploadfile').slideToggle();
         },
         showErrorOnActiveTMTable: function (message) {
-            $('.mgmt-container .active-tm-container .tm-error-message').html(message).fadeIn(100);
+            setTimeout(function (  ) {
+                $('.mgmt-container .active-tm-container .tm-error-message').html(message).fadeIn(100);
+            });
         },
         showErrorOnInactiveTMTable: function (message) {
-            $('.mgmt-container .inactive-tm-container .tm-error-message').html(message).fadeIn(100);
+            setTimeout(function (  ) {
+                $('.mgmt-container .inactive-tm-container .tm-error-message').html(message).fadeIn(100);
+            });
         },
         showWarningOnActiveTMTable: function (message) {
-            $('.mgmt-container .active-tm-container .tm-warning-message').html(message).fadeIn(100);
+            setTimeout(function (  ) {
+                $('.mgmt-container .active-tm-container .tm-warning-message').html(message).fadeIn(100);
+            });
         },
         showWarningOnInactiveTMTable: function (message) {
-            $('.mgmt-container .inactive-tm-container .tm-warning-message').html(message).fadeIn(100);
+            setTimeout(function (  ) {
+                $('.mgmt-container .inactive-tm-container .tm-warning-message').html(message).fadeIn(100);
+            });
         },
         showSuccessOnActiveTMTable: function (message) {
-            $('.mgmt-container .active-tm-container .tm-success-message').html(message).fadeIn(100);
+            setTimeout(function (  ) {
+                $('.mgmt-container .active-tm-container .tm-success-message').html(message).fadeIn(100);
+            });
         },
         showSuccessOnInactiveTMTable: function (message) {
-            $('.mgmt-container .inactive-tm-container .tm-success-message').html(message).fadeIn(100);
+            setTimeout(function (  ) {
+                $( '.mgmt-container .inactive-tm-container .tm-success-message' ).html( message ).fadeIn( 100 );
+            });
         },
+
         hideAllBoxOnTables: function () {
             $('.mgmt-container .active-tm-container .tm-error-message, .mgmt-container .active-tm-container .tm-warning-message, .mgmt-container .active-tm-container .tm-success-message,' +
                 '.mgmt-container .inactive-tm-container .tm-error-message, .mgmt-container .inactive-tm-container .tm-warning-message, .mgmt-container .inactive-tm-container .tm-success-message,' +
@@ -2139,6 +2170,43 @@
                     UI.showErrorOnActiveTMTable('There was a problem sharing the key, try again or contact the support.');
                 }
             });
+        },
+
+        storeMultiMatchLangs: function (  ) {
+            var primary = ( $('#multi-match-1').val() ) ? $('#multi-match-1').val() : undefined;
+            var secondary = ( $('#multi-match-2').val() ) ? $('#multi-match-2').val() : undefined;
+            if ( primary ) {
+                $('#multi-match-2').removeAttr('disabled');
+            } else {
+                $('#multi-match-2').attr('disabled', true);
+                $('#multi-match-2').val('');
+                secondary = undefined;
+            }
+            UI.crossLanguageSettings = {primary: primary, secondary: secondary};
+            localStorage.setItem("multiMatchLangs", JSON.stringify(UI.crossLanguageSettings));
+            if ( UI.getContribution ) {
+                if ( primary ) {
+                    SegmentActions.modifyTabVisibility( 'multiMatches', true );
+                    $( 'section.loaded' ).removeClass( 'loaded' );
+                    UI.getContribution( UI.currentSegment, 0 );
+                } else {
+                    SegmentActions.modifyTabVisibility( 'multiMatches', false );
+                }
+            }
+        },
+
+        checkCrossLanguageSettings: function (  ) {
+            var settings = localStorage.getItem("multiMatchLangs");
+            if ( settings ) {
+                var selectPrimary = $('#multi-match-1');
+                var selectSecondary = $('#multi-match-2');
+                settings = JSON.parse(settings)
+                UI.crossLanguageSettings = settings;
+                selectPrimary.val(settings.primary);
+                selectSecondary.val(settings.secondary);
+                if ( settings.primary )
+                    selectSecondary.removeAttr('disabled');
+            }
         }
 
     });

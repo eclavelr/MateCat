@@ -7,7 +7,7 @@
  * 
  */
 
-abstract class DataAccess_AbstractDaoObjectStruct extends stdClass implements Countable {
+abstract class DataAccess_AbstractDaoObjectStruct extends stdClass implements DataAccess_IDaoStruct, Countable {
 
     protected $validator;
     protected $cached_results = array();
@@ -60,10 +60,11 @@ abstract class DataAccess_AbstractDaoObjectStruct extends stdClass implements Co
      *
      */
     protected function cachable($method_name, $params, $function) {
-        if ( !array_key_exists($method_name,  $this->cached_results) ) {
-            $this->cached_results[$method_name] = call_user_func($function, $params);
+        $resultset = @$this->cached_results[ $method_name ];
+        if( $resultset == null ){
+            $resultset = $this->cached_results[ $method_name ] = call_user_func($function, $params);
         }
-        return $this->cached_results[$method_name];
+        return $resultset;
     }
 
     /**
@@ -155,12 +156,13 @@ abstract class DataAccess_AbstractDaoObjectStruct extends stdClass implements Co
      * @param $mask array|null a mask for the keys to return
      *
      * @return array
+     *
      * @throws ReflectionException
      */
     public function toArray( $mask = null ){
 
         $attributes = array();
-        $reflectionClass = new ReflectionClass( $this );
+        $reflectionClass = new ReflectionObject( $this );
         $publicProperties = $reflectionClass->getProperties( ReflectionProperty::IS_PUBLIC ) ;
         foreach( $publicProperties as $property ) {
             if ( !empty($mask) ) {
@@ -185,7 +187,7 @@ abstract class DataAccess_AbstractDaoObjectStruct extends stdClass implements Co
     }
 
     public function count() {
-        $reflectionClass = new ReflectionClass( $this );
+        $reflectionClass = new ReflectionObject( $this );
         return count( $reflectionClass->getProperties( ReflectionProperty::IS_PUBLIC ) );
     }
 
